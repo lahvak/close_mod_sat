@@ -1,4 +1,4 @@
-# Generating Closed Modular Coloring of Graphs Using SAT solver
+# Generating Closed Modular Colorings of Graphs Using SAT solver
 
 (Accompanying materials to "The Signal Detection Problem: Closed Modular
 Colorings on Grid Graphs", by Jan Hlavacek and Garry L. Johns, submitted for
