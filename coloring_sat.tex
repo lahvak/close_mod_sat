@@ -1,0 +1,892 @@
+\documentclass[letterpaper]{article}
+\usepackage{pythontex}
+\usepackage[]{amsmath}
+\usepackage{amssymb}
+\usepackage{acronym}
+\usepackage[]{graphicx}
+\usepackage[margin=1.2in]{geometry}
+\graphicspath{{./pythontex-files-coloring_sat/}}
+
+\acrodef{CNF}{Conjunctive Normal Form}
+
+\let\vel\vee
+\let\at\wedge
+
+\title{Generating Closed Modular Colorings of Graphs Using a SAT Solver}
+
+\author{Jan Hlavacek and Garry L.~Johns\\Saginaw Valley State University}
+
+\begin{document}
+\maketitle
+\section{Introduction}
+We start with a graph $G$.  To keep things simple, we will assume
+that $G$ has no true twins.  We color all vertices with colors from $0$ to $k-1$.  Then we
+calculate the closed modular coloring:  for each vertex you add the colors of
+all its neighbours, add it to its color, and assign that number mod $k$ as its
+new color. 
+
+A coloring is proper if no two adjacent vertices have the same color. 
+
+We are trying to see if it is possible to color a graph $G$ so that the
+resulting closed modular coloring is proper. 
+
+\section{Description using logic}
+
+We will have $k$ colors, $0,1,\cdots,k-1$.  We try to describe the condition of
+having a closed modular coloring using logic formulas, so we can
+use a SAT-solver to find out if the condition is satisfiable for
+the graph G. We will need to introduce a number of logical
+variables and write a logic formula using these variables that
+will be equivalent to $G$ having a proper closed modular coloring.
+
+\subsection{Vertices}
+
+\subsubsection{Coloring a vertex}
+
+For each vertex $v$, there will be $k$ color variables $c_v^i$, $i =
+0,\dots,k-1$.  Exactly one of those will be true at a time, since a vertex cannot
+have more than one color:
+\begin{gather}
+   c_v^1 \vel c_v^2 \vel c_v^3 \vel \dots \vel c_v^k \label{eq:colors1}\\
+   \neg c_v^i \vel \neg c_v^j \text{ for $i \neq j$\label{eq:colors2}}
+\end{gather}
+
+\subsubsection{Modular coloring}
+
+Now we need to figure out what will be the new color of the vertex in the
+modular coloring.  That will depend on the neighbouring vertices, as well as on
+the vertex itself.
+
+We will take a list of all the neighbours of the vertex $v$, including the
+vertex $v$ itself, and go through all
+the possible colorings of this list.  Each such coloring $C_s$ will be assigned
+a variable $n_v^s$, that will be equivalent to all the neighbouring vertices
+having exactly the colors from $C_s$. 
+
+For example, if the list of neighbours of $v$ is $[v,w,y,x,z]$, then for coloring
+$C_s = [2,1,3,2,4]$ of those vertices the variable $n_v^s$ will satisfy
+\begin{equation}
+ n_v^s \equiv c_v^2 \at c_w^1 \at c_y^3 \at c_x^2 \at c_z^4
+   \label{eq:neighbours}
+\end{equation}
+
+For each color $j$, there will be possibly several colorings $C_{s_1}, C_{s_2},
+\dots, C_{s_{t_j}}$ of the neighbouring vertices that will produce $j$ as the
+modular coloring of the vertex $v$.  We introduce $k$ variables $m_v^j$ for $j
+= 1, 2, \dots, k$, satisfying
+\begin{equation}
+   m_v^j \equiv n_v^{s_1} \vel n_v^{s_2} \vel \cdots \vel n_v^{s_{t_j}}
+   \label{eq:modular}
+\end{equation}
+
+\subsection{Edges}
+
+The rules for edges will be simple enough.  All we need to assure is that the
+resulting modular coloring is proper, that is for each edge $(v,w)$, the
+modular coloring of the vertex $v$ is different than the modular coloring of
+the vertex $w$.   That means that for each color $j = 0,\dots,k-1$, $m_v^j$ and
+$m_w^j$ cannot be both true:
+\begin{equation}
+   \neg m_v^j \vel \neg m_w^j \text{ for $j = 0,\dots,k-1$}
+   \label{eq:edge}
+\end{equation}
+
+\section{Translation to CNF}
+
+Satisfiability solvers typically require their input to be in the \ac{CNF}, that is
+a written as a conjunction of clauses, where each clause is a disjunction of
+single variables or their negations.  We see that equations \eqref{eq:colors1},
+\eqref{eq:colors2} and \eqref{eq:edge} already are in \ac{CNF}, while
+\eqref{eq:neighbours} and \eqref{eq:modular} need to be translated. 
+
+The formula $a \equiv (b \at c)$ can be translated into \ac{CNF} as 
+\begin{equation}
+   \left(c \vee \neg a\right) \wedge \left(b \vee \neg a\right) \wedge \left(a \vee \neg b \vee \neg c\right)
+   \label{eq:trans1}
+\end{equation}
+while the formula $a \equiv (b \vel c)$ can be translated to 
+\begin{equation}
+   \left(a \vee \neg c\right) \wedge \left(a \vee \neg b\right) \wedge \left(b \vee c \vee \neg a\right)
+   \label{eq:trans2}
+\end{equation}
+
+Equation \eqref{eq:neighbours} will then translate to 
+\begin{gather}
+   \label{eq:neighbour_trans_1} (c_v^2 \vel \neg n_v^s) \at (c_w^1 \vel \neg n_v^s) \at (c_y^3 \vel \neg
+   n_v^s) \at (c_x^2 \vel \neg n_v^s) \at (c_z^4 \vel \neg n_v^s)\\
+   \label{eq:neighbour_trans_2} n_v^s \vel \neg c_v^2 \vel \neg c_w^1 \vel \neg c_y^3 \vel \neg
+   c_x^2 \vel \neg c_z^4
+\end{gather}
+In general, for each coloring $C_s$ of the neighbours of vertex $v$, we will have the conjunction of 
+\begin{equation}
+   c_w^j \vel \neg n_v^s
+   \label{eq:general_neighbour_1}
+\end{equation}
+where $w$ runs through all the neighbors of $v$, including $v$, and for each $w$, $j$ is the
+color of $w$ in the coloring $C_s$, with 
+\begin{equation}
+   n_v^s \vel \neg c_{w_1}^{j_1} \vel \neg c_{w_2}^{j_2} \vel \cdots
+   \label{eq:general_neighbour_2}
+\end{equation}
+where $w_i$ are all the neighbors of $v$, including $v$, and $j_i$ are their corresponding
+colors in $C_s$. 
+
+The formula \eqref{eq:modular} will translate to 
+\begin{gather}
+   \label{eq:modular_general_1} m_v^j \vel \neg n_v^{s_i}\\
+   \label{eq:modular_general_2} n_v^{s_1} \vel n_v^{s_2} \vel \cdots \vel
+   n_v^{s_{t_j}} \vel \neg m_v^j
+\end{gather}
+where $j$ runs through all the colors $1$ to $k$, and $s_i$ runs through all
+indices $s$ such that the corresponding coloring $C_s$ of all the neighbours of
+$v$ will produce the modular coloring of $v$ with the color $j$. 
+
+\section{Implementation}
+
+\subsection{Imports and Setup}
+
+We will use the \pyv|pycosat| module, which provides a Python interface to the
+picosat SAT solver.  We will also need few functions from the \pyv|itertools|
+module. We will use the \pyv|graph_tool| module to handle the graph
+stuff. 
+
+\begin{pyblock}
+import pycosat
+from itertools import count, islice, product
+import graph_tool as gt
+\end{pyblock}
+
+The \pyv|pycosat| module requires variables to be represented by integers. Each
+variable will have to be associated with a unique integer.  To keep track which
+integers we already used, we will use the \pyv|count()| function from
+the \pyv|itertools| module. 
+
+\subsection{Assigning Variables}
+
+Given a graph, we will need to assign the initial variables for original colors
+($c_v^j$) and for colors of a modular coloring ($m_v^j$).  We need to create two property maps for the
+given graph, one for original colors, and one for the closed modular coloring.
+Each property will be a vector of integers of length $k$, where $k$ is the
+number of colors.  The following function will create and populate one such map
+
+\begin{pyblock}
+def assign_color_vars(g, no_of_colors, vars_generator):
+   """
+   Create property map for graph g, containing variable numbers 
+   for colors.
+
+   Args:
+      g: A graph
+      no_of_colors: the number of colors used for graph coloring.
+      vars_generator: generator that produces numbers for logical
+         variables, to be used in pycosat clauses.
+
+   Returns:
+      A vertex property map of 'vector<int>' type, filled with 
+      numbers of pycosat variables corresponding to possible 
+      colors for each vertex.
+   """
+   colors_map = g.new_vertex_property("vector<int>")
+   for v in g.vertices():
+      colors_map[v] = list(islice(vars_generator, no_of_colors))
+   return colors_map
+\end{pyblock}
+
+We will call this function twice for each graph, first time to generate
+variable numbers for all $c_v^j$ variables, the second time to generate numbers
+for all $m_v^j$ variables. 
+
+\subsection{Generating Clauses}
+
+Now we will write some functions that will generate clauses for the SAT solver.
+Each clause will be a list of positive or negative integers.  Positive number
+means that the variable with the number appear in the conjunction, while a
+negative number means that the negation of the variable with the opposite
+number appears in the conjunction. 
+
+\subsubsection{Clauses from equations \eqref{eq:colors1} and \eqref{eq:colors2}}
+
+These clauses are grouped by individual vertices.  We will write a function
+that will receive a vertex and generate all these clauses for that vertex.  For
+the equation \eqref{eq:colors2}, we will only need the clauses for $j < i$,
+since disjunction is commutative.
+
+\begin{pyblock}
+def vertex_color_clauses(v, color_map):
+   """
+   Return a list of clauses dealing with individual vertex 
+   initial color.
+
+   Args:
+      v: a graph vertex
+      color_map: a vertex property map that assigns variable 
+      numbers to colors of individual vertices.
+
+   Returns:
+      A list of lists, each of them representing one clause.
+   """
+   l = []
+   colors = color_map[v]
+   l.append(list(colors))
+   for i in range(1,len(colors)):
+      for j in range(i):
+         l.append([-colors[i],-colors[j]])
+   return l
+\end{pyblock}
+
+\subsubsection{Clauses from equation \eqref{eq:edge}}
+
+There will be a group of clauses for each edge, assuring that the resulting
+modular coloring is proper.  The function will receive an edge, and return a
+list of clauses. It will need the lists of modular coloring colors for each end
+of the edge, and create a list of clauses assuring that the colors on the ends
+of the edge are not the same.  
+
+\begin{pyblock}
+def edge_clauses(e, modular_color_map):
+   """
+   Return a list of clauses assuring that the colors of the 
+   modular coloring on the ends of the edge are different.
+
+   Args:
+      e: an edge of a graph
+      modular_color_map: a vertex property map that assigns 
+      variable numbers to colors in modular coloring of 
+      individual vertices.
+
+   Returns:
+      A list of lists, each of which correspond to one clause.
+   """
+   l = []
+   mc1 = modular_color_map[e.source()]
+   mc2 = modular_color_map[e.target()]
+   for i,j in zip(mc1,mc2):
+      l.append([-i,-j])
+   return l
+\end{pyblock}
+
+\subsubsection{Clauses from equations \eqref{eq:general_neighbour_1},
+\eqref{eq:general_neighbour_2}, \eqref{eq:modular_general_1} and
+\eqref{eq:modular_general_2}}
+
+This is the trickiest part.  For a given vertex $v$, we take the list of all
+the neighbours of $v$, including $v$.  Then we will go through all the possible colorings of
+this list, for each coloring we allocate a new variable, and make it equivalent
+to a conjunction of the vertex color variables corresponding to the colors in
+the coloring.  At the same time, we will check what color would a modular
+coloring produced by this coloring of neighbours of $v$ produce at $v$.   We
+will add the variable we allocated to this coloring to a list of variables for
+the obtained modular color. At the end we will go through all the modular color
+variables for vertex $v$, and generate clauses that will make each equivalent
+to the disjunction of all the variables added to their lists.
+
+We will start with two auxiliary functions.  Each will receive a variable
+number as the first argument, and a list of variable numbers as its second
+argument.  The first will generate clauses making the first variable equivalent
+to the conjunction of all the variables in the list, the second one will do the
+same for a disjunction of all the variables on the list. 
+
+\begin{pyblock}
+def equiv_to_conjunction(a,vars):
+   """
+   Return a list of clauses that assure that the variable a is 
+   equivalent to the conjunction of all the variables in the list 
+   vars.
+
+   Args:
+      a: integer, a number of a variable
+      vars: a list of integers, each corresponding to a variable
+
+   Returns:
+      a list of lists of integers.  Each list of integers 
+      corresponds to one clause.  The conjunction of all the 
+      clauses will be a CNF version of the equivalence of the 
+      variable a with the conjunction of variables in l.
+   """
+   l = [[a] + [-b for b in vars]]
+   for b in vars:
+      l.append([b,-a])
+   return l
+
+def equiv_to_disjunction(a,vars):
+   """
+   Return a list of clauses that assure that the variable a is 
+   equivalent to the disjunction of all the variables in the list 
+   vars.
+
+   Args:
+      a: integer, a number of a variable
+      vars: a list of integers, each corresponding to a variable
+
+   Returns:
+      a list of lists of integers.  Each list of integers 
+      corresponds to one clause.  The conjunction of all the 
+      clauses will be a CNF version of the equivalence of the 
+      variable a with the disjunction of variables in l.
+   """
+   l = [[-a] + vars]
+   for b in vars:
+      l.append([-b,a])
+   return l
+\end{pyblock}
+
+The next function will receive a vertex $v$, and produce all the clauses from
+equations \eqref{eq:general_neighbour_1}, \eqref{eq:general_neighbour_2},
+\eqref{eq:modular_general_1} and \eqref{eq:modular_general_2}. 
+
+\begin{pyblock}
+def modular_coloring_clauses(v,color_map,modular_color_map,
+                             vars_generator):
+   """
+   Return the list of clauses that will assure that the colors in 
+   the modular_coloring_map are created as a closed modular 
+   coloring from the colors in the color_map.
+
+   Args:
+      v: a vertex of a graph
+      color_map: a vertex property map that assigns variable 
+         numbers to colors of individual vertices.
+      modular_color_map: a vertex property map that assigns 
+         variable numbers to colors in modular coloring of 
+         individual vertices.
+      vars_generator: generator that produces numbers for logical
+         variables, to be used in pycosat clauses.
+
+   Returns:
+      A list of lists, each of which correspond to one clause.
+
+   Notes:
+      May allocate new pycosat variables using the vars_generator.
+   """
+   modular_colors = list(modular_color_map[v])
+   k = len(modular_colors) # number of colors
+   m_lists = {m:[] for m in modular_colors}
+   neighbours = list(v.out_neighbours()) + [v]
+   colorings = product(range(k),repeat=len(neighbours))
+   l = []
+   for cs in colorings:
+      new_var = next(vars_generator)
+      modular_color = sum(cs) % k
+      m_lists[modular_colors[modular_color]] += [new_var]
+      neighbour_color_vars = []
+      for w,c in zip(neighbours,cs):
+         neighbour_color_vars.append(color_map[w][c])
+      l += equiv_to_conjunction(new_var,neighbour_color_vars)
+
+   for m,s in m_lists.items():
+      l += equiv_to_disjunction(m,s)
+
+   return l
+\end{pyblock}
+
+\subsubsection{Putting all clauses together}
+
+Now we need to put all the clause generating functions together. The following
+function will take a graph and a number of colors, and generate all the clauses
+for the graph.  The result can then be fed directly to the pycosat solver. 
+
+The steps will be:
+\begin{enumerate}
+   \item Create a new variable generator.
+   \item Assign color and modular color variables to all vertices.
+   \item For each vertex:
+      \begin{enumerate}
+         \item Generate all the clauses for equations \eqref{eq:colors1} and
+            \eqref{eq:colors2}.
+         \item Generate all the clauses for equations
+            \eqref{eq:general_neighbour_1}, 
+            \eqref{eq:general_neighbour_2}, 
+            \eqref{eq:modular_general_1} and 
+            \eqref{eq:modular_general_2}.
+      \end{enumerate}
+   \item For each edge, generate all clauses for equation \eqref{eq:edge}.
+   \item Return a complete list of all the generated clauses.  Also return the
+      two vertex property maps, since we will need them to decode the result.
+\end{enumerate}
+
+\begin{pyblock}
+def graph_clauses(g,num_of_colors):
+   """
+   Return the complete lists of all the clauses describing 
+   conditions for a proper closed modular coloring of g.
+
+   Args:
+      g: a graph_tool graph
+      num_of_colors: number of colors for the modular coloring
+
+   Returns: 
+      a list of lists of integers: each list of integers
+      corresponds to a disjunction of variables or their
+      negations, and two vertex property maps containing 
+      the colors for the original coloring and the corresponding 
+      modular coloring.
+   """
+   l = []
+   vars_generator = count(1)
+   color_map = assign_color_vars(g,num_of_colors,vars_generator)
+   modular_color_map = assign_color_vars(g,num_of_colors,
+                                         vars_generator)
+
+   for v in g.vertices():
+      l += vertex_color_clauses(v,color_map)
+      l += modular_coloring_clauses(v,color_map,modular_color_map,
+                                    vars_generator)
+
+   for e in g.edges():
+      l +=  edge_clauses(e, modular_color_map)
+
+   return l, color_map, modular_color_map
+\end{pyblock}
+
+\subsection{Making sense of the result}
+
+The pycosat solver returns a long list of positive or negative integers, one
+for each variable.  Each number corresponds to one variable, and is positive if
+the corresponding variable is true, and negative if the variable is false.  We
+are only interested in the variables on the beginning, the ones that correspond
+to the color variables and modular color variables for each vertex. Out of
+these, we only want to know, for each vertex, which of its color variables and
+which of its modular color variables has a positive number in the result. 
+
+A safe way (see below for some ideas that could make things easier if we could
+rely on some assumptions) would be:
+\begin{enumerate}
+   \item Discard all negative entries from the list
+   \item Create a set from the positive entries, to make lookup faster
+   \item Iterate through vertices of the graph:
+      \begin{enumerate}
+         \item For each vertex, iterate through the colors, asking if each is
+            in the set, until you find one
+         \item Do the same for modular colors
+      \end{enumerate}
+   \item For each vertex, remember the found color and modular color.
+\end{enumerate}
+
+If we could assume that:
+\begin{itemize}
+   \item Iteration through vertices of a graph always happens in the same
+      order. (that is probably true)
+   \item The variables returned by pycosat solver always come ordered by
+      absolute value. (that is also probably true.  We could also sort the list
+      ourselves)
+   \item The first (number of colors)*(number of vertices) variables correspond
+      to the colors, the next to modular colors (that is true, but it would be
+      too hackish to rely on it.  Changing one part of the code could
+      completely mess up the other part, introducing messy hard to detect
+      errors.)
+\end{itemize}
+we could simply discard all negative variables, zip together the first (number
+of vertices) of the remaining numbers with the vertices of the graph to get the
+colors, and zip together the next (number of vertices) of the numbers with the
+vertices to get the modular coloring. 
+
+\begin{pyblock}
+def extract_colors(g,vertex_map,result_list):
+   """
+   Extract colors of each vertex from the result list.
+
+   Args:
+      g: a graph_tool graph
+      vertex_map: a vertex property map.  Each vertex has a list
+         of its color variables. Could be original color map or
+         modular map.
+      result_list: the list of variable values returned by the
+         pycosat solver.
+
+   Returns:
+      a new vertex property map: one integer for each vertex, the
+      color of the vertex in the coloring found by the solver.
+   """
+   s = set(i for i in result_list if i > 0)
+   coloring = g.new_vertex_property('int')
+   for v in g.vertices():
+      for i,n in enumerate(vertex_map[v]):
+         if n in s:
+            coloring[v] = i
+            break
+
+   return coloring
+\end{pyblock}
+
+We will try to plot the graph to verify that the solver indeed found a coloring
+with the right properties.  We can either use colors to show the original
+coloring and numbers to show the modular coloring (default), or numbers to show
+the original coloring and colors to show the modular coloring (set
+\pyv|color_orig| to \pyv|False|).  The default setting will make it easier to
+see patterns in the original coloring that lead to a closed modular coloring,
+while the alternative setting will make it easier to quickly verify that the
+resulting coloring is indeed a proper closed modular coloring generated by the
+original coloring.
+
+\begin{pyblock}
+from graph_tool.draw import graph_draw
+
+def plot_graph(g,coloring,modular_coloring,
+               color_names,layout,
+               filename,size=(600,600),
+               color_orig=True):
+   fcolors = g.new_vertex_property('string')
+   labels = g.new_vertex_property('string')
+   if color_orig:
+      for v in g.vertices():
+         fcolors[v] = color_names[coloring[v]]
+         labels[v] = str(modular_coloring[v])
+   else:
+      for v in g.vertices():
+         fcolors[v] = color_names[modular_coloring[v]]
+         labels[v] = str(coloring[v])
+
+   graph_draw(g,vertex_fill_color=fcolors,
+              vertex_text=labels,
+              pos=layout,
+              output_size=size,
+              output=filename)
+\end{pyblock}
+
+\section{Check the coloring}
+
+Just to make sure, we will make an independent check if
+\begin{enumerate}
+   \item the produced coloring is indeed a closed modular coloring obtained
+      from the original coloring.
+   \item the produced coloring is proper.
+\end{enumerate}
+
+These can be done the following way:
+\begin{enumerate}
+   \item Loop through vertices, calculating modular coloring and comparing it
+      with the assigned modular color.
+   \item Loop through edges, making sure the two colors at the ends of the edge
+      are different. 
+\end{enumerate}
+
+\begin{pyblock}
+def is_modular(g,coloring,modular_coloring,k):
+   """
+   Check if the coloring described by modular_coloring is really a
+   modular coloring. 
+
+   Args:
+      g: a graph-tool graph
+      coloring: a vertex property map describing the original
+         coloring
+      modular_coloring: a vertex property map describing the
+         coloring that is tested for modularity
+      k: an integer, the number of colors available
+
+   Returns:
+      True if the coloring in modular_coloring is really modular,
+      False otherwise
+   """
+   for v in g.vertices():
+      neighbours = list(v.out_neighbours()) + [v]
+      true_modular_color = sum(coloring[w] 
+                               for w in neighbours) % k
+      if modular_coloring[v] != true_modular_color:
+         return False
+
+   return True
+
+def is_proper(g,coloring):
+   """
+   Check if the coloring of g described by coloring is proper
+
+   Args:
+      g: a graph-tool graph
+      coloring: a vertex property map describing a coloring of g
+
+   Return:
+      True if the coloring is proper, False otherwise
+   """
+   for e in g.edges():
+      if coloring[e.source()] == coloring[e.target()]:
+         return False
+
+   return True
+\end{pyblock}
+
+\subsection{Test a given graph}
+
+Now we take the generated clauses and feed them into the
+SAT-solver.  Then we decode the result, and return a tuple whose
+first element will be \pyv|True| if we found a solution, or
+\pyv|False| if we did not. 
+
+In the case a solution was found, the second element will be the
+string \pyv|'SAT'|, and the third and fourth element will be the
+original coloring and the modular coloring, respectively. 
+
+If the solution was not found, the second element of the tuple
+will be a string explaining what happened:
+\begin{description}
+   \item[UNSAT] the solver decided that there is no solution.
+   \item[UNKNOWN] the solver was not able to find a solution, and
+      was not able to prove that there is none.
+   \item[NOT MODULAR] the solver found a solution, but the
+      supposedly modular coloring returned by the solver is not a
+      closed modular coloring generated by the original coloring
+      returned by the solver. This should \emph{never} happen!
+   \item[NOT PROPER] the solver found a solution, but the
+      supposedly modular coloring returned by the solver is not a
+      proper. This should \emph{never} happen!
+\end{description}
+
+\begin{pyblock}
+def g_has_pcmc(g,k):
+   l, c_m, m_c_m = graph_clauses(g,k)
+   result = pycosat.solve(l)
+   
+   if (result == 'UNSAT') or (result == 'UNKNOWN'):
+      return (False,result)
+
+   coloring = extract_colors(g,c_m,result)
+   modular_coloring = extract_colors(g,m_c_m,result)
+
+   if not is_modular(g,coloring,modular_coloring,k):
+      return(False,'NOT MODULAR',coloring,modular_coloring)
+   if not is_proper(g,modular_coloring):
+      return(False,'NOT PROPER',coloring,modular_coloring)
+
+   return(True,'SAT',coloring,modular_coloring)
+\end{pyblock}
+
+\subsection{Iteration over all colorings}
+
+The Pycosat solver makes it possible to iterate over all solutions, using the
+\pyv|itersolve| function.  We will use this to attempt to find all colorings of
+a given graph that produce a proper closed modular coloring.  For graphs that
+have a large number of such colorings, this can be rather lengthy process, and,
+especially for larger graphs, will require a large amount of memory.  We will
+therefore provide an option to limit the number of coloring found.  We will
+also provide an option to check if the resulting colorings are proper and
+closed modular.
+
+\begin{pyblock}
+def g_all_pcmc(g,k,limit=0,check=True):
+   l, c_m, m_c_m = graph_clauses(g,k)
+   if limit==0:
+      results = list(pycosat.itersolve(l))
+   else:
+      results = list(islice(pycosat.itersolve(l),limit))
+   
+   colorings = [extract_colors(g,c_m,r) for r in results]
+   modular_colorings = [extract_colors(g,m_c_m,r) for r in results]
+
+   combined = zip(colorings, modular_colorings)
+
+   return [(c,m) for c,m in combined if (not check) or 
+      (is_modular(g,c,m,k) and is_proper(g,m))]
+\end{pyblock}
+
+
+\section{Try it on $K_5$}
+
+Since $K_5$ has true twins, and since we do not check for true
+twins, there will not be a proper modular coloring of $K_5$. 
+
+\begin{pyblock}
+g = gt.Graph(directed=False)
+
+vs = [g.add_vertex() for i in range(5)]
+for v in vs:
+   for w in vs:
+      if v != w:
+         g.add_edge(v,w)
+
+res = g_has_pcmc(g,3)
+
+if not res[0]:
+   print(res[1])
+else:
+   print('Modular coloring is proper')
+\end{pyblock}
+
+The result was \printpythontex.
+
+\section{Grid Graphs}
+
+We will see if the solver can find closed modular colorings for
+some grid graphs. 
+
+We will start by some imports and some code for properly laying
+out grid graphs. Grid graphs are available in graph-tool in the
+\pyv|graph_tool.generation| module, and are called 'lattice'
+graphs.  Automatic layout algorithms do not work well for them, so
+we define our own layout.
+\begin{pyblock}
+from graph_tool.generation import lattice  
+
+def grid_layout(g,rows,cols):
+   grid_pos = g.new_vertex_property("vector<float>")
+
+   for i in range(cols):
+      for j in range(rows):
+         grid_pos[g.vertex(rows*i + j)] = [i,j]
+
+   return grid_pos
+\end{pyblock}
+
+The following function will receive a list of pairs $(m,n)$ and an integer $k$,
+and return a dictionary containing, for each pair $(m,n)$, the result of
+\pyv|g_has_pcmc| for the grid graph $G_{m,n}$. It will only return the Boolean
+result and the string result, without the actual colorings. 
+\begin{pyblock}
+def check_grids(pairs,k):
+   return {p:g_has_pcmc(lattice(p),k)[0:2] for p in pairs}
+\end{pyblock}
+
+Since the graphs $G_{m,n}$ and $G_{n,m}$ are equivalent from our point of view,
+we only need to check $G_{m,n}$ for $n\le m$.  The following function will
+generate all such pairs:
+\begin{pyblock}
+def triangle(K):
+   return ((i,j) for i in range(2,K) for j in range(2,i+1))
+\end{pyblock}
+
+The following function will then check all the grid graphs $G_{m,n}$ for $2 \le
+m,n < K$ (using the above mentioned symmetry), and print the results.
+\begin{pyblock}
+def check_all_grids(K,k):
+   def format_g(pair):
+      return '$G_{{{:d},{:d}}}$'.format(*pair)
+
+   results = check_grids(triangle(K),k)
+   graphs_without = [p for p in results if not results[p][0]]
+   if len(graphs_without) == 0:
+      print('All of the graphs have proper {:d}-modular coloring'.format(k))
+   else:
+      print('Proper {:d}-modular coloring not found for '.format(k) + 
+         ', '.join(format(g) for g in sorted(graphs_without)))
+\end{pyblock}
+
+\subsection{$k = 3$}
+
+First we will look at grid graphs $G_{m,n}$ for $2 \le m,n < 21$:
+\begin{pyblock}
+check_all_grids(21,3)
+\end{pyblock}
+\printpythontex
+
+\subsection{$k = 2$}
+
+Now we will try with $k=2$:
+\begin{pyblock}
+check_all_grids(21,2)
+\end{pyblock}
+
+\printpythontex
+
+\subsection{All Colorings for $3\times m$}
+We will look at coloring by 2 colors for $3\times m$ graphs.
+
+\begin{pyblock}
+def all_for_grid(m,n,k,color_names=['black','white']):
+   g = lattice([m,n])
+   results = g_all_pcmc(g,k)
+   print('There are {} proper closed modular colorings mod {} for the graph $G_{{{:d},{:d}}}$.'.format(len(results),k,m,n))
+
+   for i,r in enumerate(results):
+      filename = 'grid_{:d}_{:d}_{:d}_{:d}.pdf'.format(m,n,k,i)
+      plot_graph(g,r[0],r[1],
+                    color_names,
+                    grid_layout(g,m,n),
+                    filename,size=(50*(n-1),50*m))
+      frm = 'width=\\linewidth' if n > 10 else ''
+      print('\n\n\\includegraphics[' + frm + ']{' + filename + '}\n\n')
+\end{pyblock}
+
+\printpythontex
+
+\begin{pyblock}
+for n in range(2,21):
+   print('\n\\subsection{{Colorings for $G_{{3,{:d}}}$}}'.format(n))
+   all_for_grid(3,n,2)
+\end{pyblock}
+
+\printpythontex
+
+\subsection{All Colorings for $4\times m$}
+The same code can be used to generate all coloring by 2 colors for $4\times m$ graphs, 
+for $m \le 20$:
+
+\begin{pyblock}
+for n in range(2,21):
+   print('\n\\subsection{{Colorings for $G_{{4,{:d}}}$}}'.format(n))
+   all_for_grid(4,n,2)
+\end{pyblock}
+
+\printpythontex
+
+\subsection{All Colorings for $5\times m$}
+The same code can be used to generate all coloring by 2 colors for $5\times m$ graphs, 
+for $m \le 40$:
+
+\begin{pyblock}
+for n in range(2,41):
+   print('\n\\subsection{{Colorings for $G_{{5,{:d}}}$}}'.format(n))
+   all_for_grid(5,n,2)
+\end{pyblock}
+
+\printpythontex
+
+\subsection{All Colorings for $6\times m$}
+The same code can be used to generate all coloring by 2 colors for $6\times m$ graphs, 
+for $m \le 40$:
+
+\begin{pyblock}
+for n in range(2,41):
+   print('\n\\subsection{{Colorings for $G_{{6,{:d}}}$}}'.format(n))
+   all_for_grid(6,n,2)
+\end{pyblock}
+
+\printpythontex
+
+\subsection{A Matrix}
+
+Next we will calculate how many closed 2-modular colorings are there for grid
+graphs $G_{m,n}$ for $2 \le m,n < 18$.  Since the calculation is very long for
+graphs that have large number of such colorings, we will stop after finding 33
+colorings for each graph.  We will list these as ``$>32$'' in the table. 
+
+\begin{pyblock}
+k = 2
+L = 18
+M = [[0]*(L-2) for i in range(2,L)]
+for m in range(2,L):
+   for n in range(2,m+1):
+      g = lattice([m,n])
+      l, c_m, m_c_m = graph_clauses(g,k)
+      M[m-2][n-2] = len(list(islice(pycosat.itersolve(l),33)))
+      M[n-2][m-2] = M[m-2][n-2]
+\end{pyblock}
+
+\begin{pyblock}
+print('\\begin{tabular}{r|' + 'c'*(L-2) + '}\n')
+print('&' + '&'.join(str(i) for i in range(2,L)) + '\\\\\\hline\n')
+for i,R in enumerate(M):
+   print(str(i+2) + '&' + '&'.join(str(j) if j < 33 else '$>32$' for j in R) + '\\\\\n')
+print('\\end{tabular}')
+\end{pyblock}
+
+\printpythontex
+
+\subsection{All Colorings for $10\times m$}
+
+\begin{pyblock}
+for n in range(2,41):
+   print('\n\\subsection{{Colorings for $G_{{10,{:d}}}$}}'.format(n))
+   all_for_grid(10,n,2)
+\end{pyblock}
+
+\printpythontex
+
+\subsection{All Colorings for $14\times m$}
+
+\begin{pyblock}
+for n in range(2,41):
+   print('\n\\subsection{{Colorings for $G_{{14,{:d}}}$}}'.format(n))
+   all_for_grid(14,n,2)
+\end{pyblock}
+
+\printpythontex
+\end{document}
