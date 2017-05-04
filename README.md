@@ -39,6 +39,13 @@ sources as you like provided that you acknowledge the origin of the software in
 the source code. More details can be found in the [LICENSE](LICENSE) file that comes with
 the sources.
 
+## Availability
+
+This material is currently available at the following locations:
+
+- Jan Hlavacek's website: <http://www.svsu.edu/~jhlavace/close_mod_sat/README.html>
+- GitHub: <https://github.com/lahvak/close_mod_sat>
+
 ## Communications
 
 Please direct any communications about this software to Jan Hlavacek, at
